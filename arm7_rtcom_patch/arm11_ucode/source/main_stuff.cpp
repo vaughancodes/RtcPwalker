@@ -24,8 +24,18 @@
 u8 ir_buffer[136];
 static u8 ir_buffer_size = 0;
 
+static inline void ir_delay(volatile u32 count)
+{
+	while (count--) { __asm__ volatile(""); }
+}
+
 void ir_init() {
 	I2C_init();
+	
+	// Stop RX/TX and FIFO to ensure divisor latches deterministically
+	I2C_write(REG_EFCR, 0x06); 
+	I2C_write(REG_FCR,  0x00);
+	ir_delay(20000);
 
 	// Set baud rate
 	u8 lcr = I2C_read(REG_LCR);
@@ -40,6 +50,12 @@ void ir_init() {
 
 	I2C_write(REG_LCR, lcr);
 	I2C_write(REG_IER, BIT(4));
+	
+	ir_delay(20000);
+	
+	// Re-arm FIFO and enable RX
+	I2C_write(REG_FCR,  0x07);
+	I2C_write(REG_EFCR, 0x04);
 }
 
 void ir_beginComm() {
