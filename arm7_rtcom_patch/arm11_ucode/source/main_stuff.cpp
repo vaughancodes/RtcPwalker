@@ -29,33 +29,65 @@ static inline void ir_delay(volatile u32 count)
 	while (count--) { __asm__ volatile(""); }
 }
 
-void ir_init() {
-	I2C_init();
-	
-	// Stop RX/TX and FIFO to ensure divisor latches deterministically
-	I2C_write(REG_EFCR, 0x06); 
-	I2C_write(REG_FCR,  0x00);
-	ir_delay(20000);
+static inline void ir_flush_fifo()
+{
+	// Drain any garbage bytes currently buffered
+	for (int k = 0; k < 32; k++) {
+		u8 lvl = I2C_read(REG_RXLVL);
+		if (!lvl) break;
 
-	// Set baud rate
-	u8 lcr = I2C_read(REG_LCR);
+		u8 tmp[64];
+		if (lvl > sizeof(tmp)) lvl = sizeof(tmp);
+		I2C_readArray(REG_FIFO, tmp, lvl);
+	}
+}
 
-	// Enable access to DLL and DLH
-	I2C_write(REG_LCR, lcr | BIT(7));
-	// Disable sleep mode
-	I2C_write(REG_IER, 0);
+static inline void ir_write_div10_8n1()
+{
+	// Force 8N1, DLAB clear
+	I2C_write(REG_LCR, 0x03);
+
+	// DLAB=1 to access DLL/DLH
+	I2C_write(REG_LCR, 0x03 | BIT(7));
 
 	I2C_write(REG_DLL, 10);
 	I2C_write(REG_DLH, 0);
 
-	I2C_write(REG_LCR, lcr);
-	I2C_write(REG_IER, BIT(4));
-	
+	// Back to 8N1, DLAB clear
+	I2C_write(REG_LCR, 0x03);
+}
+
+static inline void ir_configure_div10_now()
+{
+	// Hard stop + clear
+	I2C_write(REG_EFCR, 0x06);      // disable TX/RX
+	I2C_write(REG_FCR,  0x00);      // disable FIFO
+	I2C_write(REG_IER,  0x00);      // disable sleep mode
+	I2C_write(REG_IOSTATE, 0x00);   // sane IO state
+
 	ir_delay(20000);
-	
-	// Re-arm FIFO and enable RX
+
+	// Program divisor=10 and known-good framing (8N1)
+	ir_write_div10_8n1();
+
+	// Re-arm RX
+	I2C_write(REG_FCR,  0x07);      // reset+enable FIFO
+	I2C_write(REG_EFCR, 0x04);      // enable receiver
+
+	ir_delay(20000);
+	ir_flush_fifo();
+
+	// Re-write divisor=10 (same value) to force latch on picky units
+	ir_write_div10_8n1();
+
 	I2C_write(REG_FCR,  0x07);
 	I2C_write(REG_EFCR, 0x04);
+	ir_flush_fifo();
+}
+
+void ir_init() {
+	I2C_init();
+	ir_configure_div10_now();
 }
 
 void ir_beginComm() {
@@ -70,6 +102,9 @@ void ir_beginComm() {
 	I2C_write(REG_IOSTATE, 0);
 	// Reset and enable FIFO
 	I2C_write(REG_FCR, 0x07);
+
+	// Ensure we are listening
+	I2C_write(REG_EFCR, 0x04);
 
 	ir_buffer_size = 0;
 }
@@ -131,8 +166,8 @@ void ir_send(u8 size) {
 
 	tc = rx(1000);
 
-	// Disable transmitter and receiver
-	I2C_write(REG_EFCR, 0x06);
+	// Keep receiver enabled
+	I2C_write(REG_EFCR, 0x04);
 
 	ir_buffer_size = tc;
 }
