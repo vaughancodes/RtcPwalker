@@ -1,9 +1,8 @@
-name: Build
-
+name: Release
 on:
   push:
-    branches:
-      - "**"
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -26,3 +25,19 @@ jobs:
         with:
           name: cheatcodes
           path: action_replay_codes/
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cheatcodes
+          path: artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "RtcPwalker ${{ github.ref_name }}"
+          files: artifacts/*
