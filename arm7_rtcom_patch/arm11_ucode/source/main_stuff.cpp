@@ -123,9 +123,7 @@ static inline u8 rx(u16 timeout) {
 
 	do {
 		i = 0;
-		while (!(rxlvl = I2C_read(REG_RXLVL)) && i++ < timeout) {
-			ir_delay(300);
-		}
+		while (!(rxlvl = I2C_read(REG_RXLVL)) && i++ < timeout);
 		if (i - 1 == timeout)
 			break;
 		timeout = RX_MAX_WAIT;
