@@ -19,7 +19,7 @@
 #define REG_IOSTATE	0x58	// IOState Register
 #define	REG_EFCR	0x78	// Extra Features Control Register
 
-#define	RX_MAX_WAIT	200
+#define	RX_MAX_WAIT	40
 
 u8 ir_buffer[136];
 static u8 ir_buffer_size = 0;
@@ -123,7 +123,9 @@ static inline u8 rx(u16 timeout) {
 
 	do {
 		i = 0;
-		while (!(rxlvl = I2C_read(REG_RXLVL)) && i++ < timeout);
+		while (!(rxlvl = I2C_read(REG_RXLVL)) && i++ < timeout) {
+			ir_delay(300);
+		}
 		if (i - 1 == timeout)
 			break;
 		timeout = RX_MAX_WAIT;
@@ -164,7 +166,7 @@ void ir_send(u8 size) {
 	// Enable receiver / Disable transmitter
 	I2C_write(REG_EFCR, 0x04);
 
-	tc = rx(5000);
+	tc = rx(1000);
 
 	// Keep receiver enabled
 	I2C_write(REG_EFCR, 0x04);
