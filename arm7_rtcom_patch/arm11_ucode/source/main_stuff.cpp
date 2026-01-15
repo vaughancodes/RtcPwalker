@@ -30,11 +30,6 @@ static inline void sleep(vu32 n) {
 
 void ir_init() {
 	I2C_init();
-	
-	// Stop RX/TX and FIFO to ensure divisor latches deterministically
-	I2C_write(REG_EFCR, 0x06); 
-	I2C_write(REG_FCR,  0x00);
-	ir_delay(20000);
 
 	// Disable transmitter and receiver
 	I2C_write(REG_EFCR, 0x06);
